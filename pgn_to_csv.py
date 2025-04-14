@@ -6,14 +6,14 @@ from tqdm import tqdm
 
 zst_path = "data/lichess_db_standard_rated_2025-01.pgn.zst"
 csv_path = "data-2025-01.csv"
-max_games = 5_000
+max_games = 20_000
 
 games_data = []
 game_id = 1
 
 with open(zst_path, 'rb') as compressed:
-    dctx = zstd.ZstdDecompressor()
-    with dctx.stream_reader(compressed) as reader:
+    decompressor = zstd.ZstdDecompressor()
+    with decompressor.stream_reader(compressed) as reader:
         text_stream = io.TextIOWrapper(reader, encoding='utf-8', errors='ignore')
 
         with tqdm(total=max_games, desc="Processing games") as pbar:
@@ -24,7 +24,13 @@ with open(zst_path, 'rb') as compressed:
 
                 headers = game.headers
 
-                if headers.get("Event") != "Rated Classical game":
+                if headers.get("Event", "") != "Rated Classical game":
+                    continue
+
+                if headers.get("WhiteTitle", "") == "BOT":
+                    continue
+
+                if headers.get("BlackTitle", "") == "BOT":
                     continue
 
                 result = headers.get("Result")
@@ -37,12 +43,10 @@ with open(zst_path, 'rb') as compressed:
 
                 games_data.append({
                     "game_id": game_id,
-                    "white_name": headers.get("White", ""),
-                    "black_name": headers.get("Black", ""),
-                    "winner": winner,
                     "white_elo": headers.get("WhiteElo", ""),
                     "black_elo": headers.get("BlackElo", ""),
-                    "opening": headers.get("Opening", "")
+                    "opening": headers.get("Opening", ""),
+                    "winner": winner
                 })
 
                 game_id += 1

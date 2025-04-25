@@ -4,15 +4,17 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 # ========== Teil 1: Daten laden und Zugbaum aufbauen ==========
-parquet_path = "data-2025-01.parquet"
+
+parquet_path = "data/data_2025_01.parquet"  # Pfad zu deiner Parquet-Datei
 df = pd.read_parquet(parquet_path)
 
 def make_node():
     return {"count": 0, "wins": 0, "children": defaultdict(make_node)}
 
 root = make_node()
-max_depth = 10  # 🔻 Begrenzung auf 10 Ebenen
+max_depth = 10  # Begrenzung auf 10 Ebenen
 
+# Den Zugbaum für jedes Spiel aufbauen
 for _, row in df.iterrows():
     winner = row["winner"]
     moves = row["moves"].split()
@@ -21,7 +23,7 @@ for _, row in df.iterrows():
 
     for move in moves:
         if depth >= max_depth:
-            break  # 🔻 Ab hier abgeschnitten (Tiefe 10 erreicht)
+            break  # Ab hier abgeschnitten (Tiefe 10 erreicht)
         node = node["children"][move]
         node["count"] += 1
         if winner == 1:  # Weiß gewinnt
@@ -43,12 +45,16 @@ def add_to_graph(node, parent_name="", depth=0, max_depth=10):
             G.add_edge(parent_name, node_name)
         add_to_graph(child, node_name, depth + 1, max_depth)
 
+# Die Rekursion starten
 add_to_graph(root)
 
 # ========== Teil 3: Graph plotten ==========
 
 plt.figure(figsize=(20, 12))
-pos = nx.nx_pydot.graphviz_layout(G, prog="dot")  # hierarchisch (top-down)
+try:
+    pos = nx.nx_pydot.graphviz_layout(G, prog="dot")  # Hierarchisch (top-down)
+except ImportError:
+    pos = nx.spring_layout(G)  # Alternativ-Layout, falls graphviz nicht verfügbar ist
 
 nx.draw(
     G,

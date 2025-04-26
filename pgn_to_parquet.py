@@ -13,7 +13,7 @@ parquet_path = "data/data_2025_01.parquet"
 # Temporary storage for parsed games
 games_data = []
 batch_size = 10_000  # Number of games to store before writing to disk
-max_games = 100_000_000  # Total number of games to process
+max_games = 5_000_000  # Total number of games to process
 
 # Check if a Parquet file already exists to determine where to resume
 if os.path.exists(parquet_path):

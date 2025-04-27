@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 from functools import lru_cache
 
 import chess
@@ -5,174 +7,184 @@ import chess.engine
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-MAX_DEPTH = 10
+MAX_DEPTH = 8
 ANALYSIS_TIME = 0.5
-FIG_DPI = 200
+FIG_DPI = 500
+MIN_NODE_SIZE = 100
+MAX_NODE_SIZE = 1000
 
 
 # ─── Cached Engine Analysis ─────────────────────────────────────────────────
 @lru_cache(maxsize=None)
 def analyse_position(fen: str):
-    """
-    Analyze a FEN once and cache the result.
-    """
     board = chess.Board(fen)
     return engine.analyse(board, chess.engine.Limit(time=ANALYSIS_TIME))
 
 
 # ─── Node Factory ─────────────────────────────────────────────────────────────
-def make_node(fen=None):
-    """
-    Create a node; optionally store its FEN here.
-    """
-    return {
-        "fen": fen,
-        "count": 0,
-        "wins": 0,
-        "children": {},
-        "winrate": None,
-        "complexity": None
-    }
+def make_node(fen, move=None):
+    return {"fen": fen, "move": move, "children": {}, "count": 0,
+            "wins": 0, "winrate": None, "complexity": None}
 
 
 # ─── Build Move Tree ──────────────────────────────────────────────────────────
-def build_tree(df: pd.DataFrame):
-    """
-    Build a move-tree and record the FEN at each node.
-    """
-    root = make_node(chess.Board().fen())
-    for _, row in df.iterrows():
+def build_tree(df_tree):
+    root_tree = make_node(chess.Board().fen())
+    for _, row in df_tree.iterrows():
         board = chess.Board()
-        node = root
+        node = root_tree
         for ply, uci in enumerate(row["moves"].split()):
-            if ply >= MAX_DEPTH:
-                break
-            move = chess.Move.from_uci(uci)
-            if move not in board.legal_moves:
-                break
-            board.push(move)
+            if ply >= MAX_DEPTH: break
+            mv = chess.Move.from_uci(uci)
+            if mv not in board.legal_moves: break
+            board.push(mv)
             fen = board.fen()
             if uci not in node["children"]:
-                node["children"][uci] = make_node(fen)
+                node["children"][uci] = make_node(fen, move=uci)
             node = node["children"][uci]
             node["count"] += 1
             if row["winner"] == 1:
                 node["wins"] += 1
-    return root
+    return root_tree
 
 
-# ─── Collect All Nodes ────────────────────────────────────────────────────────
-def collect_nodes(root):
-    """
-    Flatten the tree into a list of all nodes (excluding the root if you like).
-    """
-    nodes = []
+# ─── Flatten Tree ────────────────────────────────────────────────────────────
+def collect_nodes(root_nodes):
+    out = []
 
-    def recurse(n):
-        for child in n["children"].values():
-            nodes.append(child)
-            recurse(child)
+    def recurse(n_nodes):
+        for c in n_nodes["children"].values():
+            out.append(c)
+            recurse(c)
 
-    recurse(root)
-    return nodes
+    recurse(root_nodes)
+    return out
 
 
-# ─── Convert to NetworkX Graph ───────────────────────────────────────────────
-def tree_to_graph(root):
-    G = nx.DiGraph()
+# ─── Build Graph (skip root) ─────────────────────────────────────────────────
+def tree_to_graph(root_graph):
+    graph = nx.DiGraph()
 
-    def recurse(n, parent_label=None):
-        for move, child in n["children"].items():
-            label = (
-                f"{move}\n"
-                f"WR={child['winrate'] * 100:4.1f}%  "
-                f"C={child['complexity']}"
-            )
-            G.add_node(label, complexity=child["complexity"])
-            if parent_label:
-                G.add_edge(parent_label, label)
-            recurse(child, label)
+    def recurse(n_graph, parent=None):
+        if n_graph["move"] is not None:
+            graph.add_node(n_graph["fen"],
+                           move=n_graph["move"],
+                           complexity=n_graph["complexity"],
+                           winrate=n_graph["winrate"])
+            if parent is not None:
+                graph.add_edge(parent, n_graph["fen"])
+            key = n_graph["fen"]
+        else:
+            key = None
+        for c in n_graph["children"].values():
+            recurse(c, key)
 
-    recurse(root, None)
-    return G
+    recurse(root_graph, None)
+    return graph
 
 
-# ─── Pure-Python Hierarchical Layout ─────────────────────────────────────────
-def hierarchical_forest_layout(G, width=1.0, vert_gap=0.2, vert_loc=0):
-    roots = [n for n, d in G.in_degree() if d == 0] or list(G.nodes())
-    pos = {}
+# ─── Layout ──────────────────────────────────────────────────────────────────
+def hierarchical_forest_layout(tree_graph):
+    roots = [a for a, d in tree_graph.in_degree() if d == 0] or list(tree_graph.nodes())
+    position = {}
 
-    def _place(node, left, w, vert):
-        pos[node] = (left + w / 2, vert)
-        children = list(G.successors(node))
-        if not children:
-            return
-        dx = w / len(children)
-        for i, c in enumerate(children):
-            _place(c, left + i * dx, dx, vert - vert_gap)
+    def _place(key, left, w, vert):
+        position[key] = (left + w / 2, vert)
+        kids = list(tree_graph.successors(key))
+        if not kids: return
+        dx = w / len(kids)
+        for j, k in enumerate(kids):
+            _place(k, left + j * dx, dx, vert - 0.2)
 
-    seg = width / len(roots)
+    seg = 1 / len(roots)
     for i, r in enumerate(roots):
-        _place(r, i * seg, seg, vert_loc)
-    return pos
+        _place(r, i * seg, seg, 0)
+    return position
 
 
 # ─── Main & Visualization ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # 1) Load Data
-    df = pd.read_parquet(PARQUET_PATH).head(100)
+    df = pd.read_parquet(PARQUET_PATH).head(10)
     engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
-    # 2) Build tree & collect nodes
     root = build_tree(df)
     nodes = collect_nodes(root)
 
-    # 3) Compute complexity (cheap) and winrates with progress bar
-    for node in nodes:
-        # branch factor
-        node["complexity"] = chess.Board(node["fen"]).legal_moves.count()
+    # Todo: https://chatgpt.com/c/680e269e-8358-8002-8cba-cba15f602235
+    for n in nodes:
+        n["complexity"] = chess.Board(n["fen"]).legal_moves.count()
 
-    for node in tqdm(nodes, desc="Evaluating Winrates"):
-        info = analyse_position(node["fen"])
+    # Todo: Check if this can be done w/o engine
+    for n in tqdm(nodes, desc="Evaluating nodes"):
+        info = analyse_position(n["fen"])
         cp = info["score"].white().score(mate_score=10000)
-        node["winrate"] = 1 / (1 + 10 ** (-cp / 400))
+        n["winrate"] = 1 / (1 + 10 ** (-cp / 400))
 
     engine.quit()
 
-    # 4) Build graph & layout
     G = tree_to_graph(root)
     pos = hierarchical_forest_layout(G)
 
-    # 5) Draw
-    vals = [d["complexity"] for _, d in G.nodes(data=True)]
-    fig, ax = plt.subplots(figsize=(16, 12), dpi=FIG_DPI)
+    comp = np.array([G.nodes[n]["complexity"] for n in G.nodes()])
+    norm = (comp - comp.min()) / (comp.max() - comp.min())
+    scaled = np.sqrt(norm)
+    sizes = MIN_NODE_SIZE + scaled * (MAX_NODE_SIZE - MIN_NODE_SIZE)
+
+    winrates = [G.nodes[n]["winrate"] for n in G.nodes()]
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "orange", "green"])
+
+    fig, ax = plt.subplots(figsize=(16, 8), dpi=FIG_DPI)
+
     nx.draw_networkx_nodes(
         G, pos,
-        node_size=300,
-        node_color=vals,
-        cmap=plt.cm.Reds,
-        vmin=min(vals),
-        vmax=max(vals),
-        alpha=0.9, ax=ax
+        node_size=sizes,
+        node_color=winrates,  # type: ignore
+        cmap=cmap,
+        vmin=0.35, vmax=0.65,
+        alpha=0.8,
+        ax=ax
     )
     nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle='-|>', ax=ax)
-    nx.draw_networkx_labels(G, pos, font_size=6, font_family="monospace", ax=ax)
+
+    labels = {n: G.nodes[n]["move"] for n in G.nodes()}
+    nx.draw_networkx_labels(G, pos, labels=labels,
+                            font_size=6, font_family="monospace", ax=ax)
 
     sm = mpl.cm.ScalarMappable(
-        cmap=plt.cm.Reds,
-        norm=mpl.colors.Normalize(vmin=min(vals), vmax=max(vals))
+        cmap=cmap,
+        norm=mpl.colors.Normalize(vmin=0.35, vmax=0.65)
     )
-    sm.set_array(vals)
-    cbar = fig.colorbar(sm, ax=ax, orientation="vertical", shrink=0.7)
-    cbar.set_label("Branching Factor (Complexity)", fontsize=10)
+    sm.set_array(winrates)
+    cbar = fig.colorbar(sm, ax=ax, orientation="vertical")
+    cbar.set_label("Winrate", fontsize=10)
 
-    ax.set_title("Move Tree: Winrate & Complexity", fontsize=14)
+    fig.suptitle(
+        "Move Tree: Winrate (color) & Complexity (size)",
+        fontsize=24,
+        fontweight='bold'
+    )
+    ax.set_title(
+        f"Opening: Scandinavian Defense: Mieses–Kotroc Variation | Depth: {MAX_DEPTH}",
+        fontsize=16,
+        fontstyle='italic'
+    )
     ax.axis("off")
     plt.tight_layout()
+
+    os.makedirs("images", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"images/move_tree_{timestamp}.png"
+    fig.savefig(
+        filename,
+        dpi=FIG_DPI,
+        bbox_inches="tight"
+    )
+
     plt.show()

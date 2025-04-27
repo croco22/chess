@@ -16,6 +16,7 @@ PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
 MAX_DEPTH = 8
 ANALYSIS_TIME = 0.5
+SAMPLE_SIZE = 600 # about 1 %
 FIG_DPI = 500
 MIN_NODE_SIZE = 100
 MAX_NODE_SIZE = 1000
@@ -111,7 +112,7 @@ def hierarchical_forest_layout(tree_graph):
 
 # ─── Main & Visualization ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    df = pd.read_parquet(PARQUET_PATH).head(10)
+    df = pd.read_parquet(PARQUET_PATH).sample(SAMPLE_SIZE)
     engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
     root = build_tree(df)
@@ -171,7 +172,7 @@ if __name__ == "__main__":
         fontweight='bold'
     )
     ax.set_title(
-        f"Opening: Scandinavian Defense: Mieses–Kotroc Variation | Depth: {MAX_DEPTH}",
+        f"Opening: Scandinavian Defense: Mieses–Kotroc Variation | Depth: {MAX_DEPTH} | Samples: {SAMPLE_SIZE}",
         fontsize=16,
         fontstyle='italic'
     )

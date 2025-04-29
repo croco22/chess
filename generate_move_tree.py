@@ -14,8 +14,9 @@ from tqdm import tqdm
 # ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
+SAMPLE_SIZE = 1000
+MAX_CHILDREN = 3
 MAX_DEPTH = 8
-SAMPLE_SIZE = 600 # about 1 %
 FIG_DPI = 500
 MIN_NODE_SIZE = 100
 MAX_NODE_SIZE = 500
@@ -38,10 +39,7 @@ def evaluate_move_complexity(fen: str, threshold_cp: int = 50):
         if abs(best_cp - move_cp) <= threshold_cp:
             good_moves += 1
 
-    if good_moves == 0:
-        return 100
-    else:
-        return 1 / good_moves
+    return good_moves
 
 
 # ─── Node Factory ─────────────────────────────────────────────────────────────
@@ -110,7 +108,11 @@ def tree_to_graph(root_graph):
             key = n_graph["fen"]
         else:
             key = None
-        for c in n_graph["children"].values():
+
+        children = list(n_graph["children"].values())
+        if len(children) > MAX_CHILDREN:
+            children = sorted(children, key=lambda x: x["count"], reverse=True)[:MAX_CHILDREN]
+        for c in children:
             recurse(c, key)
 
     recurse(root_graph, None)
@@ -161,10 +163,17 @@ if __name__ == "__main__":
     G = tree_to_graph(root)
     pos = hierarchical_forest_layout(G)
 
-    comp = np.array([G.nodes[n]["complexity"] if G.nodes[n]["complexity"] is not None else 0 for n in G.nodes()])
-    norm = (comp - comp.min()) / (comp.max() - comp.min() + 1e-9)
-    scaled = np.sqrt(norm)
-    sizes = MIN_NODE_SIZE + scaled * (MAX_NODE_SIZE - MIN_NODE_SIZE)
+    comp = np.array([
+        G.nodes[n]["complexity"] if G.nodes[n]["complexity"] is not None else 0
+        for n in G.nodes()
+    ])
+    comp_min = comp.min()
+    comp_max = comp.max()
+    if comp_max - comp_min == 0:
+        sizes = np.full_like(comp, MIN_NODE_SIZE)
+    else:
+        norm = (comp - comp_min) / (comp_max - comp_min)
+        sizes = MIN_NODE_SIZE + norm * (MAX_NODE_SIZE - MIN_NODE_SIZE)
 
     winrates = [G.nodes[n]["winrate"] for n in G.nodes()]
     cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "orange", "green"])
@@ -198,12 +207,13 @@ if __name__ == "__main__":
 
     fig.suptitle(
         "Move Tree: Winrate (color) & Move Complexity (size)",
-        fontsize=24,
+        fontsize=25,
         fontweight="bold",
     )
     ax.set_title(
-        f"Opening: Scandinavian Defense: Mieses–Kotroc Variation | Depth: {MAX_DEPTH} | Samples: {SAMPLE_SIZE}",
-        fontsize=16,
+        f"""Opening: Scandinavian Defense: Mieses–Kotroc Variation | 
+         Samples: {SAMPLE_SIZE} | Children: {MAX_CHILDREN} | Depth: {MAX_DEPTH}""",
+        fontsize=18,
         fontstyle="italic",
     )
     ax.axis("off")

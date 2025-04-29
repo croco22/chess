@@ -94,8 +94,13 @@ def collect_nodes(root_nodes):
 # ─── Build Graph (skip root) ─────────────────────────────────────────────────
 def tree_to_graph(root_graph):
     graph = nx.DiGraph()
+    visited = set()
 
     def recurse(n_graph, parent=None):
+        if n_graph["fen"] in visited:
+            return
+        visited.add(n_graph["fen"])
+
         if n_graph["move"] is not None:
             graph.add_node(
                 n_graph["fen"],

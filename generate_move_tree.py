@@ -14,7 +14,7 @@ from tqdm import tqdm
 # ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 10_000
 MAX_CHILDREN = 3
 MAX_DEPTH = 8
 FIG_DPI = 500
@@ -52,6 +52,7 @@ def make_node(fen, move=None):
         "wins": 0,
         "winrate": None,
         "complexity": None,
+        "avg_elo": [],
     }
 
 
@@ -75,6 +76,7 @@ def build_tree(df_tree):
             node["count"] += 1
             if row["winner"] == 1:
                 node["wins"] += 1
+            node["avg_elo"].append(row["avg_elo"])
     return root_tree
 
 
@@ -96,7 +98,7 @@ def tree_to_graph(root_graph):
     graph = nx.DiGraph()
     visited = set()
 
-    def recurse(n_graph, parent=None):
+    def recurse(n_graph, parent=None, depth=0):
         if n_graph["fen"] in visited:
             return
         visited.add(n_graph["fen"])
@@ -107,6 +109,8 @@ def tree_to_graph(root_graph):
                 move=n_graph["move"],
                 complexity=n_graph["complexity"],
                 winrate=n_graph["winrate"],
+                avg_elo=n_graph["avg_elo"],
+                depth=depth,
             )
             if parent is not None:
                 graph.add_edge(parent, n_graph["fen"])
@@ -118,7 +122,7 @@ def tree_to_graph(root_graph):
         if len(children) > MAX_CHILDREN:
             children = sorted(children, key=lambda x: x["count"], reverse=True)[:MAX_CHILDREN]
         for c in children:
-            recurse(c, key)
+            recurse(c, key, depth + 1)
 
     recurse(root_graph, None)
     return graph
@@ -152,14 +156,18 @@ if __name__ == "__main__":
     root = build_tree(df)
     nodes = collect_nodes(root)
 
-    # --- Calculate Winrate from Data (no Engine) ---
+    # --- Calculate Winrate and Average Elo ---
     for n in nodes:
         if n["count"] > 0:
             n["winrate"] = n["wins"] / n["count"]
         else:
             n["winrate"] = None
+        if n["avg_elo"]:
+            n["avg_elo"] = sum(n["avg_elo"]) / len(n["avg_elo"])
+        else:
+            n["avg_elo"] = None
 
-    # --- Calculate Move Complexity (Standard Deviation of Scores) ---
+    # --- Calculate Move Complexity ---
     for n in tqdm(nodes, desc="Evaluating Move Complexity"):
         n["complexity"] = evaluate_move_complexity(n["fen"], threshold_cp=50)
 
@@ -199,9 +207,10 @@ if __name__ == "__main__":
     nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle="-|>", ax=ax)
 
     labels = {
-        n: f"{G.nodes[n]['move']}\n{G.nodes[n]['complexity']:.1f}" if G.nodes[n]['complexity'] is not None else
+        n: f"{G.nodes[n]['move']}\n{int(G.nodes[n]['avg_elo'])}" if G.nodes[n]['avg_elo'] is not None else
         G.nodes[n]['move']
         for n in G.nodes()
+        if G.nodes[n]['depth'] < MAX_DEPTH
     }
     nx.draw_networkx_labels(G, pos, labels=labels, font_size=6, font_family="monospace", ax=ax)
 

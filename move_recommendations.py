@@ -1,117 +1,77 @@
-import os
 import random
 import chess
 import chess.engine
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
-# Konfiguration
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-MAX_DEPTH = 8
-ELO_LEVELS = [800, 1200, 1600, 2000, 2400]
+ELO_LEVELS = None  # e.g. [323, 2353, 563, 1382]
 
-# Engine initialisieren
-engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
-def get_random_position(df):
-    """
-    Wählt eine zufällige Stellung aus dem Datensatz aus.
-    """
-    row = df.sample(1).iloc[0]
+def get_random_position(data):
+    row = data.sample(1).iloc[0]
     moves = row["moves"].split()
     if len(moves) < 2:
         return chess.STARTING_FEN
     cutoff = random.randint(1, len(moves) - 1)
     board = chess.Board()
-    for move in moves[:cutoff]:
-        try:
-            board.push_uci(move)
-        except:
-            break
+    for uci in moves[:cutoff]:
+        board.push_uci(uci)
     return board.fen()
 
-def evaluate_moves(fen):
-    """
-    Bewertet alle legalen Züge in der gegebenen Stellung.
-    """
+
+def get_global_best_move(fen, stockfish):
     board = chess.Board(fen)
-    move_scores = []
-    for move in board.legal_moves:
-        board.push(move)
-        info = engine.analyse(board, chess.engine.Limit(depth=MAX_DEPTH))
-        score = info["score"].white().score(mate_score=10000)
-        board.pop()
-        move_scores.append((move, score))
-    return move_scores
+    result = stockfish.play(board, chess.engine.Limit(time=1.0))
+    return result.move
 
-def suggest_move(move_scores, player_elo):
-    """
-    Gibt den empfohlenen Zug basierend auf der Spieler-ELO zurück.
-    """
-    if player_elo < 1200:
-        # Anfänger: Züge mit geringer Bewertung bevorzugen
-        move_scores.sort(key=lambda x: abs(x[1]))
-    elif player_elo < 1800:
-        # Fortgeschrittene: Balance zwischen Bewertung und Komplexität
-        move_scores.sort(key=lambda x: abs(x[1] - 50))
-    else:
-        # Experten: Beste Bewertungen bevorzugen
-        move_scores.sort(key=lambda x: -x[1])
-    return move_scores[0]
 
-def plot_recommendations(recommendations):
-    """
-    Visualisiert die Bewertungen der empfohlenen Züge für verschiedene ELO-Stufen.
-    """
-    elos = [rec[0] for rec in recommendations]
-    scores = [rec[2] for rec in recommendations]
-    moves = [rec[1] for rec in recommendations]
+def get_historical_best_move(fen, data, e):
+    low, high = 0.9 * elo, 1.1 * elo
+    subset = data[(data['avg_elo'] >= low) & (data['avg_elo'] <= high)]
+    if subset.empty:
+        return None
 
-    plt.figure(figsize=(10, 6))
-    bars = plt.bar([str(elo) for elo in elos], scores, color='skyblue')
-    plt.xlabel("Spieler-ELO")
-    plt.ylabel("Bewertung (Centipawns)")
-    plt.title("Empfohlene Züge für verschiedene ELO-Stufen")
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    target_parts = fen.split()[:4]
+    move_counts = {}
 
-    # Beschriftungen hinzufügen
-    for bar, move in zip(bars, moves):
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2.0, yval + 5, move, ha='center', va='bottom')
+    for moves_str in subset['moves']:
+        moves = moves_str.split()
+        board = chess.Board()
+        for idx, uci in enumerate(moves[:-1]):
+            board.push_uci(uci)
+            if board.fen().split()[:4] == target_parts:
+                next_uci = moves[idx + 1]
+                move_counts[next_uci] = move_counts.get(next_uci, 0) + 1
+                break
 
-    plt.tight_layout()
-    plt.show()
+    if not move_counts:
+        return None
 
-def main():
-    # Datensatz laden
-    if not os.path.exists(PARQUET_PATH):
-        print(f"Datei {PARQUET_PATH} nicht gefunden.")
-        return
-    df = pd.read_parquet(PARQUET_PATH)
+    best_uci = max(move_counts, key=move_counts.get)
+    return best_uci
 
-    # Zufällige Stellung auswählen
-    fen = get_random_position(df)
-    print(f"Ausgewählte Stellung (FEN): {fen}")
-
-    # Züge bewerten
-    move_scores = evaluate_moves(fen)
-
-    # Empfehlungen für verschiedene ELO-Stufen
-    recommendations = []
-    for elo in ELO_LEVELS:
-        move, score = suggest_move(move_scores, elo)
-        board = chess.Board(fen)
-        san_move = board.san(move)
-        print(f"ELO {elo}: Empfohlener Zug: {san_move}, Bewertung: {score}")
-        recommendations.append((elo, san_move, score))
-
-    # Visualisierung
-    plot_recommendations(recommendations)
-
-    # Engine beenden
-    engine.quit()
 
 if __name__ == "__main__":
-    main()
+    df = pd.read_parquet(PARQUET_PATH)
+    engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+
+    fen_position = get_random_position(df)
+    print(f"Position (FEN): {fen_position}")
+
+    best_global = get_global_best_move(fen_position, engine)
+    print(f"\t* Global best move: {best_global}")
+
+    if not ELO_LEVELS:
+        min_elo = int(df["avg_elo"].min())
+        max_elo = int(df["avg_elo"].max())
+        ELO_LEVELS = random.sample(range(min_elo, max_elo + 1), 5)
+
+    for elo in ELO_LEVELS:
+        best_historical = get_historical_best_move(fen_position, df, elo)
+        if best_historical:
+            print(f"\t* ELO {elo}: Historical best move: {best_historical}")
+        else:
+            print(f"\t* ELO {elo}: No data for this position and elo segment")
+
+    engine.quit()

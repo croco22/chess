@@ -7,8 +7,8 @@ import zstandard as zstd
 from tqdm import tqdm
 
 # Paths to the input PGN.zst file and the output Parquet file
-zst_path = "data/lichess_db_standard_rated_2025-01.pgn.zst"
-parquet_path = "data/data_2025_01.parquet"
+zst_path = "../data/lichess_db_standard_rated_2025-01.pgn.zst"
+parquet_path = "../data/data_2025_01.parquet"
 
 # Temporary storage for parsed games
 games_data = []

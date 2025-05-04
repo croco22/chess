@@ -32,19 +32,18 @@ engine_path = "stockfish/stockfish-windows-x86-64-avx2.exe"
 engine = chess.engine.SimpleEngine.popen_uci(engine_path)
 
 # Baseline
-base_info = engine.analyse(board, chess.engine.Limit(time=0.5))
+base_info = engine.analyse(board, chess.engine.Limit(time=1.0))
 base_score = base_info['score'].white().score(mate_score=10_000)
 
 results = []
-for move_str in moves:
-    move = chess.Move.from_uci(move_str)
-    board.push(move)
-    info = engine.analyse(board, chess.engine.Limit(time=0.5))
+for mv in moves:
+    board.push_uci(mv)
+    info = engine.analyse(board, chess.engine.Limit(time=1.0))
     score = info['score'].white().score(mate_score=10_000)
     complexity = compute_fragility_score(board)
     board.pop()
     results.append({
-        'move': move_str,
+        'next_move': mv,
         'delta': score,
         'complexity': complexity
     })

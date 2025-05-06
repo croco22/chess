@@ -14,7 +14,7 @@ from tqdm import tqdm
 # ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-SAMPLE_SIZE = 10_000
+SAMPLE_SIZE = 1000
 MAX_CHILDREN = 3
 MAX_DEPTH = 8
 FIG_DPI = 500
@@ -189,7 +189,7 @@ if __name__ == "__main__":
         sizes = MIN_NODE_SIZE + norm * (MAX_NODE_SIZE - MIN_NODE_SIZE)
 
     winrates = [G.nodes[n]["winrate"] for n in G.nodes()]
-    cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "orange", "green"])
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "gray", "green"])
 
     fig, ax = plt.subplots(figsize=(16, 8), dpi=FIG_DPI)
 

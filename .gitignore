@@ -1,6 +1,5 @@
 /.venv/
-/data/lichess_db_standard_rated_2025-01.pgn.zst
-/data/lichess_db_standard_rated_2025-03.pgn.zst
-/data/data_2025_01.parquet
+/data/lichess_db_standard_rated_*
+/data/data_*
 /images/
 /stockfish/

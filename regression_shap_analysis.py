@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 # ---------------------------------------------------------------------------
 df = pd.read_parquet("data/stats_dataset.parquet")
 
-X = df[["delta", "fragility_score", "variance"]].copy()
+X = df[["delta", "fragility_score", "variance", "played_by", "win_pov", "pair_freq", "winrate_white", "score_test"]].copy()
 y = df["is_best"]
 
 # Standardize features for regression

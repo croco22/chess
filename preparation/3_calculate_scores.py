@@ -64,6 +64,8 @@ def build_variance_tree(b):
             )
 
             for info in infos:
+                if "pv" not in info or not info["pv"]:
+                    continue
                 move = info["pv"][0]
                 child = node.copy()
                 child.push(move)

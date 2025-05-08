@@ -1,25 +1,3 @@
-"""
-Create a supervised‑learning dataset that links the engine‑based factors (delta,
-complexity, avg_variance) to the empirical best move for players around a given
-Elo.  For every random position and several randomly drawn Elos, the script:
-
-1.  Builds a candidate list of next moves that occur at least MIN_CANDIDATE_COUNT
-    times in the historical games file.
-2.  Calls evaluate_engine_variance.py once per position (MultiPV) to obtain the
-    engine factors for all candidates in one shot (delta, complexity,
-    avg_variance).
-3.  Scores every candidate with the weighted formula from the research code and
-    selects the engine‑recommended move.
-4.  Compares that recommendation against the historically most successful move
-    among players of similar strength (±ELO_DEV) and records whether the engine
-    was *correct*.
-5.  Stores one row per (position, Elo) with all factors and the binary label
-    `is_correct`.
-
-The resulting Parquet file `data/recommendation_dataset.parquet` is ready for
-exploratory analysis / modelling in a notebook.
-"""
-
 import statistics
 from functools import lru_cache
 
@@ -29,13 +7,11 @@ import networkx as nx
 import pandas as pd
 from tqdm import tqdm
 
-PARQUET_PATH = "data/positions_2025_01.parquet"
-ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-ELO_MIN, ELO_MAX = 500, 2500
-ELO_DEV = 250
+PARQUET_PATH = "../data/positions_2025_01.parquet"
+ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
 SAMPLE_SIZE = 1000
-DEPTH_LEVELS = 3
-WIDTH = 3
+DEPTH_LEVELS_VARIANCE = 3
+VARIANCE_N_BEST_NODES = 3
 MATE_SCORE = 10_000
 LRU_CACHE_SIZE = 10_000
 ENGINE_LIMIT = 0.1
@@ -72,24 +48,27 @@ def compute_fragility_score(b: chess.Board) -> float:
     return fragility
 
 
-def build_variance_tree(b, sign):
+def build_variance_tree(b):
     level_nodes = [b.copy()]
     level_variances = []
 
-    for depth in range(DEPTH_LEVELS):
+    for depth in range(DEPTH_LEVELS_VARIANCE):
         evals: list[int] = []
         next_nodes: list[chess.Board] = []
 
         for node in level_nodes:
-            infos = engine.analyse(node, chess.engine.Limit(time=ENGINE_LIMIT), multipv=WIDTH)
+            infos = engine.analyse(
+                node,
+                chess.engine.Limit(time=ENGINE_LIMIT),
+                multipv=VARIANCE_N_BEST_NODES
+            )
 
             for info in infos:
                 move = info["pv"][0]
                 child = node.copy()
                 child.push(move)
 
-                score = info['score'].white().score(mate_score=MATE_SCORE)
-                sc = score * sign
+                sc = info["score"].white().score(mate_score=MATE_SCORE)
                 evals.append(sc)
                 next_nodes.append(child)
 
@@ -108,7 +87,7 @@ def build_variance_tree(b, sign):
 df = pd.read_parquet(PARQUET_PATH).sample(SAMPLE_SIZE)
 engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
-for idx, row in tqdm(df.iterrows(), total=len(df), desc="analysing"):
+for idx, row in tqdm(df.iterrows(), total=len(df), desc="Calculating scores"):
     board = chess.Board(row["fen"])
     side_sign = 1 if board.turn else -1
 
@@ -124,20 +103,9 @@ for idx, row in tqdm(df.iterrows(), total=len(df), desc="analysing"):
     cp_white = analyse_fen(board_after.fen())
 
     df.at[idx, "delta"] = (cp_white - base_cp_white) * side_sign
-    df.at[idx, "variance"] = build_variance_tree(board_after, side_sign)
+    df.at[idx, "variance"] = build_variance_tree(board_after)
 
-df["winrate_white"] = df.groupby(["fen", "next_move"])["win_pov"].transform("mean")
-idx_best = df.groupby("fen")["winrate_white"].idxmax()
-best_moves = df.loc[idx_best, ["fen", "next_move"]].set_index("fen")["next_move"]
-df["historical_best"] = df["fen"].map(best_moves)
-
-df["score_test"] = df["fragility_score"] + df["delta"] + df["variance"]
-idx_best = df.groupby("fen")["score_test"].idxmax()
-best_moves = df.loc[idx_best, ["fen", "next_move"]].set_index("fen")["next_move"]
-df["recommended_move"] = df["fen"].map(best_moves)
-
-df["is_best"] = df["recommended_move"].eq(df["historical_best"])
+df.to_parquet("../data/score_dataset.parquet", index=False)
+print("✅ Saved stats dataset to 'data/score_dataset.parquet'")
 
 engine.quit()
-df.to_parquet("data/stats_dataset.parquet", index=False)
-print("saved")

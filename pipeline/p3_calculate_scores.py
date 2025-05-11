@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 PARQUET_PATH = "../data/positions_2025_01.parquet"
 ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
-DEPTH_LEVELS_VARIANCE = 2
+DEPTH_LEVELS_VARIANCE = 3
 VARIANCE_N_BEST_NODES = 3
 MATE_SCORE = 10_000
 LRU_CACHE_SIZE = 10_000

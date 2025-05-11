@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.preprocessing import QuantileTransformer
+from sklearn.preprocessing import MinMaxScaler
 
 PARQUET_PATH = "../data/score_dataset.parquet"
 SAMPLE_ELOS = [500, 850, 1200, 1500, 2200]
@@ -7,9 +7,12 @@ ELO_DEV = 200
 
 df = pd.read_parquet(PARQUET_PATH)
 
-scaler = QuantileTransformer(output_distribution="uniform")
+scaler = MinMaxScaler()
 scaled_cols = ["fragility_score", "delta", "variance"]
 df[scaled_cols] = scaler.fit_transform(df[scaled_cols])
+
+df["fragility_score"] = 1 - df["fragility_score"]
+df["variance"] = 1 - df["variance"]
 
 df["score_base"] = df[scaled_cols].mean(axis=1)
 

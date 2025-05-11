@@ -13,13 +13,13 @@ DEPTH_LEVELS_VARIANCE = 3
 VARIANCE_N_BEST_NODES = 3
 MATE_SCORE = 10_000
 LRU_CACHE_SIZE = 10_000
-ENGINE_LIMIT = 0.1
+ENGINE_LIMIT = 1  # second
 
 
 @lru_cache(maxsize=LRU_CACHE_SIZE)
 def engine_play(fen: str) -> str:
     b = chess.Board(fen)
-    result = engine.play(b, chess.engine.Limit(time=5))
+    result = engine.play(b, chess.engine.Limit(time=ENGINE_LIMIT))
     return str(result.move)
 
 

@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 PARQUET_PATH = "../data/score_dataset.parquet"
 SAMPLE_ELOS = [500, 850, 1200, 1500, 2200]
@@ -7,7 +7,7 @@ ELO_DEV = 200
 
 df = pd.read_parquet(PARQUET_PATH)
 
-scaler = MinMaxScaler()
+scaler = StandardScaler()
 scaled_cols = ["fragility_score", "delta", "variance"]
 df[scaled_cols] = scaler.fit_transform(df[scaled_cols])
 

@@ -9,24 +9,24 @@ from tqdm import tqdm
 
 PARQUET_PATH = "../data/positions_2025_01.parquet"
 ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
-DEPTH_LEVELS_VARIANCE = 3
+DEPTH_LEVELS_VARIANCE = 5
 VARIANCE_N_BEST_NODES = 3
 MATE_SCORE = 10_000
-LRU_CACHE_SIZE = 10_000
-ENGINE_LIMIT = 1  # second
+LRU_CACHE_SIZE = None # cache can grow until the process runs out of memory
+ENGINE_LIMIT = 20 # depth for Stockfish engine evaluation
 
 
 @lru_cache(maxsize=LRU_CACHE_SIZE)
 def engine_play(fen: str) -> str:
     b = chess.Board(fen)
-    result = engine.play(b, chess.engine.Limit(time=ENGINE_LIMIT))
+    result = engine.play(b, chess.engine.Limit(depth=ENGINE_LIMIT))
     return str(result.move)
 
 
 @lru_cache(maxsize=LRU_CACHE_SIZE)
 def analyse_fen(fen: str) -> int:
     b = chess.Board(fen)
-    info = engine.analyse(b, chess.engine.Limit(time=ENGINE_LIMIT))
+    info = engine.analyse(b, chess.engine.Limit(depth=ENGINE_LIMIT))
     return info["score"].white().score(mate_score=MATE_SCORE)
 
 
@@ -94,19 +94,16 @@ engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
 for idx, row in tqdm(df.iterrows(), total=len(df), desc="Calculating scores"):
     board = chess.Board(row["fen"])
+    base_cp_white = analyse_fen(board.fen())
     side_sign = 1 if board.turn else -1
 
     df.at[idx, "engine_move"] = engine_play(board.fen())
 
-    base_cp_white = analyse_fen(board.fen())
-
     board_after = board.copy()
     board_after.push_uci(row["next_move"])
-
-    df.at[idx, "fragility_score"] = compute_fragility_score(board.fen())
-
     cp_white = analyse_fen(board_after.fen())
 
+    df.at[idx, "fragility_score"] = compute_fragility_score(board_after.fen())
     df.at[idx, "delta"] = (cp_white - base_cp_white) * side_sign
     df.at[idx, "variance"] = build_variance_tree(board_after.fen())
 

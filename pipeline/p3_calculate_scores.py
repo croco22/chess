@@ -9,11 +9,11 @@ from tqdm import tqdm
 
 PARQUET_PATH = "../data/positions_2025_01.parquet"
 ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
-DEPTH_LEVELS_VARIANCE = 5
+DEPTH_LEVELS_VARIANCE = 3  # Todo: 5
 VARIANCE_N_BEST_NODES = 3
 MATE_SCORE = 10_000
-LRU_CACHE_SIZE = None # cache can grow until the process runs out of memory
-ENGINE_LIMIT = 20 # depth for Stockfish engine evaluation
+LRU_CACHE_SIZE = None  # cache can grow until the process runs out of memory
+ENGINE_LIMIT = 20  # depth for Stockfish engine evaluation
 
 
 @lru_cache(maxsize=LRU_CACHE_SIZE)
@@ -62,7 +62,7 @@ def build_variance_tree(fen: str) -> float:
         for node in level_nodes:
             infos = engine.analyse(
                 node,
-                chess.engine.Limit(time=ENGINE_LIMIT),
+                chess.engine.Limit(depth=ENGINE_LIMIT),
                 multipv=VARIANCE_N_BEST_NODES
             )
 
@@ -103,8 +103,8 @@ for idx, row in tqdm(df.iterrows(), total=len(df), desc="Calculating scores"):
     board_after.push_uci(row["next_move"])
     cp_white = analyse_fen(board_after.fen())
 
-    df.at[idx, "fragility_score"] = compute_fragility_score(board_after.fen())
     df.at[idx, "delta"] = (cp_white - base_cp_white) * side_sign
+    df.at[idx, "fragility_score"] = compute_fragility_score(board_after.fen())
     df.at[idx, "variance"] = build_variance_tree(board_after.fen())
 
 df.to_parquet("../data/score_dataset.parquet", index=False)

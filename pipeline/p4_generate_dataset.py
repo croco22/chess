@@ -1,9 +1,9 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-PARQUET_PATH = "../data/score_dataset.parquet"
-SAMPLE_ELOS = [500, 800, 1000, 1200, 1500, 1800, 2000, 2200, 2500]
-ELO_DEV = 100
+PARQUET_PATH = "../data/test_score_dataset.parquet"
+SAMPLE_ELOS = [800, 1000, 1200, 1500, 1800, 2000, 2200]
+ELO_DEV = 250
 MIN_SAMPLES_PER_GROUP = 20
 
 

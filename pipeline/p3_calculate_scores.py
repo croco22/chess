@@ -7,7 +7,7 @@ import networkx as nx
 import pandas as pd
 from tqdm import tqdm
 
-PARQUET_PATH = "../data/positions_2025_01.parquet"
+PARQUET_PATH = "../data/test_positions_2025_01.parquet"
 ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
 DEPTH_LEVELS_VARIANCE = 5   # Number of levels in the variance tree
 VARIANCE_N_BEST_NODES = 3   # How many best continuations to evaluate per node
@@ -122,9 +122,9 @@ for idx, row in tqdm(df.iterrows(), total=len(df), desc="Evaluating positions"):
 
     # Compute fragility and variance features for the resulting position
     df.at[idx, "fragility_score"] = compute_fragility_score(board_after.fen())
-    df.at[idx, "variance"] = build_variance_tree(board_after.fen())
+    df.at[idx, "variance"] = 0
 
 engine.quit()
 
-df.to_parquet("../data/score_dataset.parquet", index=False)
-print("✅ Engine evaluation results saved to 'data/score_dataset.parquet'")
+df.to_parquet("../data/test_score_dataset.parquet", index=False)
+print("✅ Engine evaluation results saved to 'data/test_score_dataset.parquet'")

@@ -1,9 +1,9 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-PARQUET_PATH = "../data/test_score_dataset.parquet"
+PARQUET_PATH = "../data/score_dataset.parquet"
 SAMPLE_ELOS = [800, 1000, 1200, 1500, 1800, 2000, 2200]
-ELO_DEV = 250
+ELO_DEV = 300
 MIN_SAMPLES_PER_GROUP = 20
 
 
@@ -18,10 +18,6 @@ df = pd.read_parquet(PARQUET_PATH)
 scaler = StandardScaler()
 scaled_cols = ["delta", "fragility_score", "variance"]
 df[scaled_cols] = scaler.fit_transform(df[scaled_cols])
-
-# Combine evaluation factors into a unified base score
-# Todo: Multiply factors using the coefficient signs --> Coefficient values or just sign?
-df["score"] = df["delta"] + df["fragility_score"] * -1 + df["variance"]
 
 for elo in SAMPLE_ELOS:
     group_count_col = f"group_count_{elo}"
@@ -47,9 +43,16 @@ for elo in SAMPLE_ELOS:
     )
     df = df.merge(winrate, on=["fen", "next_move"], how="left")
 
-    # Assign the base score directly
-    # Todo: später gewichtet ersetzen
-    df[score_col] = df["score"]
+    # Assign score
+    delta_weight = 0.5
+    factor = min(max((elo - 1000) / 1000, 0.0), 1.0)
+    fragility_weight = 0.5 * (1 - factor)
+    variance_weight = 1.0 - delta_weight - fragility_weight
+    df[score_col] = (
+            fragility_weight * df["fragility_score"] +
+            delta_weight * df["delta"] +
+            variance_weight * df["variance"]
+    )
 
     # Determine the recommended move per FEN based on the score
     idx_best_score = df.groupby("fen")[score_col].idxmax().dropna().astype(int)
@@ -110,7 +113,6 @@ agg_dict = {
     "delta": "first",
     "fragility_score": "first",
     "variance": "first",
-    "score": "first",
 }
 
 # Include Elo-specific evaluation fields in the aggregation

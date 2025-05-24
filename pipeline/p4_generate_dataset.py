@@ -5,7 +5,7 @@ PARQUET_PATH = "../data/score_dataset.parquet"
 SAMPLE_ELOS = [800, 1000, 1200, 1500, 1800, 2000, 2200]
 ELO_DEV = 300
 MIN_SAMPLES_PER_GROUP = 20
-
+WINRATE_THRESHOLD = 0.01
 
 # Utility function to check if (fen, move) pair is in the set of top 3 moves
 def in_top3(fen_series, move_series, top3):
@@ -49,9 +49,9 @@ for elo in SAMPLE_ELOS:
     fragility_weight = 0.5 * (1 - factor)
     variance_weight = 1.0 - delta_weight - fragility_weight
     df[score_col] = (
-            fragility_weight * df["fragility_score"] +
-            delta_weight * df["delta"] +
-            variance_weight * df["variance"]
+        fragility_weight * df["fragility_score"] +
+        delta_weight * df["delta"] +
+        variance_weight * df["variance"]
     )
 
     # Determine the recommended move per FEN based on the score
@@ -59,22 +59,22 @@ for elo in SAMPLE_ELOS:
     recommended = df.loc[idx_best_score, ["fen", "next_move"]].set_index("fen")["next_move"]
     df[rec_col] = df["fen"].map(recommended)
 
-    # Determine the historically most successful move per FEN
-    idx_best = df.groupby("fen")[winrate_col].idxmax().dropna().astype(int)
-    historical_best = df.loc[idx_best, ["fen", "next_move"]].set_index("fen")["next_move"]
-    df[hist_col] = df["fen"].map(historical_best)
+    # Determine the historically most successful moves per FEN
+    max_winrate = winrate.groupby("fen")[winrate_col].transform("max")
+    winrate["max_winrate"] = max_winrate
+    best_thresh = winrate[winrate[winrate_col] >= winrate["max_winrate"] - WINRATE_THRESHOLD]
+    historical = best_thresh.groupby("fen")["next_move"].agg(list)
+    df[hist_col] = df["fen"].map(historical).apply(lambda x: x if isinstance(x, list) else [])
 
     # Compare recommendations and engine move with historical best
-    df[is_best_col] = df[rec_col] == df[hist_col]
-    df[is_engine_col] = df["engine_move"] == df[hist_col]
+    df[is_best_col] = df.apply(lambda r: r[rec_col] in r[hist_col], axis=1).astype('boolean')
+    df[is_engine_col] = df.apply(lambda r: r["engine_move"] in r[hist_col], axis=1).astype('boolean')
 
     # Mask out positions with too few samples or missing data
     invalid_mask = (
-            (df[group_count_col] < MIN_SAMPLES_PER_GROUP) |
-            (df[group_count_col].isna())
+        (df[group_count_col] < MIN_SAMPLES_PER_GROUP) |
+        (df[group_count_col].isna())
     )
-    df[is_best_col] = df[is_best_col].astype("boolean")
-    df[is_engine_col] = df[is_engine_col].astype("boolean")
     df.loc[invalid_mask, [is_best_col, is_engine_col]] = pd.NA
 
     # Identify top 3 highest-winrate moves per FEN
@@ -114,8 +114,6 @@ agg_dict = {
     "fragility_score": "first",
     "variance": "first",
 }
-
-# Include Elo-specific evaluation fields in the aggregation
 for elo in SAMPLE_ELOS:
     agg_dict.update({
         f"group_count_{elo}": "first",

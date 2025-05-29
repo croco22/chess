@@ -1,5 +1,4 @@
 /.venv/
-/data/lichess_db_standard_rated_*
-/data/*_2025_01.parquet
+/data/*2025*01*
 /images/
 /stockfish/

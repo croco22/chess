@@ -2,16 +2,17 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 PARQUET_PATH = "../data/score_dataset.parquet"
-MIN_SAMPLES_PER_GROUP = 20
-WINRATE_THRESHOLD = 0.01
-ELOS = list(range(800, 2200, 100))
-ELO_DEV = 300
 FEATURES = ["delta", "fragility_score", "variance"]
+ELOS = list(range(900, 2100, 100))
+ELO_DEV = 300
+WINRATE_THRESHOLD = 0.01
+MIN_SAMPLES_PER_GROUP = 15
 
 df = pd.read_parquet(PARQUET_PATH)
 scaler = StandardScaler()
 df[FEATURES] = scaler.fit_transform(df[FEATURES])
 
+# For each target Elo band, compute group-level statistics
 for elo in ELOS:
     group_count_col = f"group_count_{elo}"
     winrate_col = f"winrate_{elo}"
@@ -22,7 +23,7 @@ for elo in ELOS:
     mask = df["played_by_elo"].between(elo - ELO_DEV, elo + ELO_DEV)
     df_elo = df[mask].copy()
 
-    # Compute historical winrate per (fen, move) pair for this Elo range
+    # Compute historical winrate per position-move pair for this Elo range
     winrate = (
         df_elo.groupby(["fen", "next_move"])['win_pov']
         .agg([('count', 'count'), ('mean', 'mean')])
@@ -39,7 +40,7 @@ for elo in ELOS:
     hist_map = historical.to_dict()
     df[hist_col] = df['fen'].map(hist_map).apply(lambda x: x if isinstance(x, list) else [])
 
-    # Boolean-Spalte, ob next_move in historisch bester Liste
+    # Create a boolean column indicating whether the actual next move is one of the historically best moves
     df[is_hist_col] = df.apply(lambda r: r['next_move'] in r[hist_col], axis=1).astype('boolean')
 
     # Mask out positions with too few samples or missing data
@@ -49,7 +50,7 @@ for elo in ELOS:
     )
     df.loc[invalid_mask, is_hist_col] = pd.NA
 
-# Aggregate to one row per (FEN, next_move) pair
+# Aggregate to one row per position-move pair
 agg_dict = {
     "games_count": "first",
     "played_by_elo": "mean",

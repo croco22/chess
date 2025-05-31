@@ -9,11 +9,11 @@ from tqdm import tqdm
 
 PARQUET_PATH = "../data/positions_2025_01.parquet"
 ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
-DEPTH_LEVELS_VARIANCE = 5   # Number of levels in the variance tree
-VARIANCE_N_BEST_NODES = 3   # How many best continuations to evaluate per node
-MATE_SCORE = 10_000         # Score used to normalize mate evaluations
-LRU_CACHE_SIZE = None       # Unlimited cache size
-ENGINE_LIMIT = 20           # Stockfish search depth
+DEPTH_LEVELS_VARIANCE = 5   # How many ply-layers to explore when computing variance
+VARIANCE_N_BEST_NODES = 3   # Number of principal continuations per node
+ENGINE_LIMIT = 20           # Search depth passed to Stockfish
+MATE_SCORE = 10_000         # Large centipawn value to represent mates
+LRU_CACHE_SIZE = None       # Unlimited size for the lru_cache decorator
 
 
 # Cached function to get best move from the engine for a given FEN
@@ -76,6 +76,7 @@ def build_variance_tree(fen: str) -> float:
             )
 
             for info in infos:
+                # Skip if no principal variation exists
                 if "pv" not in info or not info["pv"]:
                     continue
                 move = info["pv"][0]
@@ -94,6 +95,7 @@ def build_variance_tree(fen: str) -> float:
 
         level_nodes = next_nodes
         if not level_nodes:
+            # Stop early if no further nodes to expand
             break
 
     # Return the average variance over all levels
@@ -103,7 +105,7 @@ def build_variance_tree(fen: str) -> float:
 df = pd.read_parquet(PARQUET_PATH)
 engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
-# Evaluate each position in the dataset
+# Iterate over every position record to compute features
 for idx, row in tqdm(df.iterrows(), total=len(df), desc="Evaluating positions"):
     board = chess.Board(row["fen"])
     base_cp_white = analyse_fen(board.fen())

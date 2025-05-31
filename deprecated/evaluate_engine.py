@@ -28,7 +28,7 @@ board = chess.Board(sys.argv[1])
 moves = ast.literal_eval(sys.argv[2])
 
 # Stockfish Engine
-engine_path = "stockfish/stockfish-windows-x86-64-avx2.exe"
+engine_path = "../stockfish/stockfish-windows-x86-64-avx2.exe"
 engine = chess.engine.SimpleEngine.popen_uci(engine_path)
 
 # Baseline

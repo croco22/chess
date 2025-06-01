@@ -14,7 +14,7 @@ from tqdm import tqdm
 # ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 10_000
 MAX_CHILDREN = 3
 MAX_DEPTH = 8
 FIG_DPI = 500

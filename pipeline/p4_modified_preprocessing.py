@@ -43,13 +43,6 @@ for elo in ELOS:
     # Create a boolean column indicating whether the actual next move is one of the historically best moves
     df[is_hist_col] = df.apply(lambda r: r['next_move'] in r[hist_col], axis=1).astype('boolean')
 
-    # Mask out positions with too few samples or missing data
-    invalid_mask = (
-            (df[group_count_col] < MIN_SAMPLES_PER_GROUP) |
-            (df[group_count_col].isna())
-    )
-    df.loc[invalid_mask, is_hist_col] = pd.NA
-
 # Aggregate to one row per position-move pair
 agg_dict = {
     "games_count": "first",

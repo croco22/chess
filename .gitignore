@@ -1,6 +1,5 @@
 /.idea/
 /.venv/
 /data/*2025*01*
-# /data/
-# /images/
+/images/
 /stockfish/

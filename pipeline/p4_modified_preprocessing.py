@@ -3,7 +3,7 @@ from sklearn.preprocessing import StandardScaler
 
 PARQUET_PATH = "../data/score_dataset.parquet"
 FEATURES = ["delta", "fragility_score", "variance"]
-ELOS = list(range(900, 2100, 100))
+ELOS = list(range(1000, 2000, 100))
 ELO_DEV = 300
 WINRATE_THRESHOLD = 0.01
 MIN_SAMPLES_PER_GROUP = 15

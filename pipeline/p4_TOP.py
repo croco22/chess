@@ -1,12 +1,12 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-PARQUET_PATH = "../data/score_dataset.parquet"
+PARQUET_PATH = "../data/score_dataset_48h.parquet"
 FEATURES = ["delta", "fragility_score", "variance"]
 ELOS = list(range(1000, 2000, 100))
 ELO_DEV = 300
 WINRATE_THRESHOLD = 0.01
-MIN_SAMPLES_PER_GROUP = 15
+MIN_SAMPLES_PER_GROUP = 20
 
 df = pd.read_parquet(PARQUET_PATH)
 scaler = StandardScaler()

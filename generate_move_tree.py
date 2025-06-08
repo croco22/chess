@@ -1,5 +1,3 @@
-import os
-from datetime import datetime
 from functools import lru_cache
 
 import chess
@@ -11,38 +9,36 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-# ─── Configuration ───────────────────────────────────────────────────────────
 PARQUET_PATH = "data/moves_2025_01.parquet"
 ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-SAMPLE_SIZE = 10_000
+SAMPLE_SIZE = 50_000
 MAX_CHILDREN = 3
 MAX_DEPTH = 8
-FIG_DPI = 500
+THRESHOLD_CP = 50
+MATE_SCORE = 10_000
 MIN_NODE_SIZE = 100
 MAX_NODE_SIZE = 500
 
 
-# ─── Cached Engine Analysis: Evaluate only Top-K Best Moves ───────────────────
 @lru_cache(maxsize=None)
-def evaluate_move_complexity(fen: str, threshold_cp: int = 50):
+def evaluate_move_complexity(fen):
     board = chess.Board(fen)
     info = engine.analyse(board, chess.engine.Limit(depth=MAX_DEPTH))
-    best_cp = info["score"].white().score(mate_score=10000)
+    best_cp = info["score"].pov(board.turn).score(mate_score=MATE_SCORE)
 
     good_moves = 0
     for move in board.legal_moves:
         board.push(move)
         move_info = engine.analyse(board, chess.engine.Limit(depth=MAX_DEPTH))
-        move_cp = move_info["score"].white().score(mate_score=10000)
+        move_cp = move_info["score"].pov(not board.turn).score(mate_score=MATE_SCORE)
         board.pop()
 
-        if abs(best_cp - move_cp) <= threshold_cp:
+        if abs(best_cp - move_cp) <= THRESHOLD_CP:
             good_moves += 1
 
     return good_moves
 
 
-# ─── Node Factory ─────────────────────────────────────────────────────────────
 def make_node(fen, move=None):
     return {
         "fen": fen,
@@ -56,7 +52,6 @@ def make_node(fen, move=None):
     }
 
 
-# ─── Build Move Tree ──────────────────────────────────────────────────────────
 def build_tree(df_tree):
     root_tree = make_node(chess.Board().fen())
     for _, row in df_tree.iterrows():
@@ -80,7 +75,6 @@ def build_tree(df_tree):
     return root_tree
 
 
-# ─── Flatten Tree ────────────────────────────────────────────────────────────
 def collect_nodes(root_nodes):
     out = []
 
@@ -93,7 +87,6 @@ def collect_nodes(root_nodes):
     return out
 
 
-# ─── Build Graph (skip root) ─────────────────────────────────────────────────
 def tree_to_graph(root_graph):
     graph = nx.DiGraph()
     visited = set()
@@ -128,7 +121,6 @@ def tree_to_graph(root_graph):
     return graph
 
 
-# ─── Layout ──────────────────────────────────────────────────────────────────
 def hierarchical_forest_layout(tree_graph):
     roots = [a for a, d in tree_graph.in_degree() if d == 0] or list(tree_graph.nodes())
     position = {}
@@ -148,7 +140,6 @@ def hierarchical_forest_layout(tree_graph):
     return position
 
 
-# ─── Main & Visualization ────────────────────────────────────────────────────
 if __name__ == "__main__":
     df = pd.read_parquet(PARQUET_PATH).sample(SAMPLE_SIZE)
     engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
@@ -156,7 +147,7 @@ if __name__ == "__main__":
     root = build_tree(df)
     nodes = collect_nodes(root)
 
-    # --- Calculate Winrate and Average Elo ---
+    # Calculate Winrate and Average Elo
     for n in nodes:
         if n["count"] > 0:
             n["winrate"] = n["wins"] / n["count"]
@@ -167,9 +158,9 @@ if __name__ == "__main__":
         else:
             n["avg_elo"] = None
 
-    # --- Calculate Move Complexity ---
+    # Calculate Move Complexity
     for n in tqdm(nodes, desc="Evaluating Move Complexity"):
-        n["complexity"] = evaluate_move_complexity(n["fen"], threshold_cp=50)
+        n["complexity"] = evaluate_move_complexity(n["fen"])
 
     engine.quit()
 
@@ -189,19 +180,18 @@ if __name__ == "__main__":
         sizes = MIN_NODE_SIZE + norm * (MAX_NODE_SIZE - MIN_NODE_SIZE)
 
     winrates = [G.nodes[n]["winrate"] for n in G.nodes()]
-    cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "gray", "green"])
+    cmap = mpl.colors.LinearSegmentedColormap.from_list("RG", ["red", "#959595", "green"])
 
-    fig, ax = plt.subplots(figsize=(16, 8), dpi=FIG_DPI)
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     nx.draw_networkx_nodes(
         G,
         pos,
         node_size=sizes,
-        node_color=winrates,  # type: ignore
+        node_color=winrates,  # noqa
         cmap=cmap,
         vmin=0.35,
         vmax=0.65,
-        alpha=0.8,
         ax=ax,
     )
     nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle="-|>", ax=ax)
@@ -216,26 +206,9 @@ if __name__ == "__main__":
 
     sm = mpl.cm.ScalarMappable(cmap=cmap, norm=mpl.colors.Normalize(vmin=0.35, vmax=0.65))
     sm.set_array(winrates)
-    cbar = fig.colorbar(sm, ax=ax, orientation="vertical")
-    cbar.set_label("Winrate", fontsize=10)
-
-    fig.suptitle(
-        "Move Tree: Winrate (color) & Move Complexity (size)",
-        fontsize=25,
-        fontweight="bold",
-    )
-    ax.set_title(
-        f"""Opening: Scandinavian Defense: Mieses–Kotroc Variation | 
-         Samples: {SAMPLE_SIZE} | Children: {MAX_CHILDREN} | Depth: {MAX_DEPTH}""",
-        fontsize=18,
-        fontstyle="italic",
-    )
+    cbar = fig.colorbar(sm, ax=ax)
+    cbar.set_label("Winrate")
     ax.axis("off")
-    plt.tight_layout()
-
-    os.makedirs("images", exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"images/move_tree_{timestamp}.png"
-    fig.savefig(filename, dpi=FIG_DPI, bbox_inches="tight")
-
+    fig.tight_layout()
+    fig.savefig("images/move_tree.pdf")
     plt.show()

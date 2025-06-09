@@ -192,6 +192,7 @@ if __name__ == "__main__":
         cmap=cmap,
         vmin=0.35,
         vmax=0.65,
+        alpha=0.8,
         ax=ax,
     )
     nx.draw_networkx_edges(G, pos, arrows=True, arrowstyle="-|>", ax=ax)

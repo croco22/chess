@@ -1,5 +1,7 @@
 /.idea/
 /.venv/
 /data/*2025*01*
+/data/recommendation_dataset.parquet
+/data/stats_dataset.parquet
 /images/
 /stockfish/

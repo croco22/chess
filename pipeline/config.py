@@ -4,7 +4,7 @@ FEATURE_LABELS = {
     "fragility_score": "Fragility",
     "variance": "Variance"
 }
-ELOS = list(range(300, 2800, 100))
-ELO_DEV = 300
-WINRATE_THRESHOLD = 0.01
-MIN_SAMPLES_PER_GROUP = 20
+ELOS = list(range(500, 2500, 100))
+ELO_DEV = 100
+WINRATE_THRESHOLD = 0.03
+MIN_SAMPLES_PER_GROUP = 15

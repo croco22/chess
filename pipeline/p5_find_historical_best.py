@@ -1,14 +1,9 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-PARQUET_PATH = "../data/score_dataset.parquet"
-FEATURES = ["delta", "fragility_score", "variance"]
-ELOS = list(range(1000, 2000, 100))
-ELO_DEV = 300
-WINRATE_THRESHOLD = 0.01
-MIN_SAMPLES_PER_GROUP = 20
+from config import *
 
-df = pd.read_parquet(PARQUET_PATH)
+df = pd.read_parquet("../data/score_dataset_48h.parquet")
 scaler = StandardScaler()
 df[FEATURES] = scaler.fit_transform(df[FEATURES])
 
@@ -43,30 +38,5 @@ for elo in ELOS:
     # Create a boolean column indicating whether the actual next move is one of the historically best moves
     df[is_hist_col] = df.apply(lambda r: r['next_move'] in r[hist_col], axis=1).astype('boolean')
 
-# Aggregate to one row per position-move pair
-agg_dict = {
-    "games_count": "first",
-    "played_by_elo": "mean",
-    "win_pov": "mean",
-    "engine_move": "first",
-    "delta": "first",
-    "fragility_score": "first",
-    "variance": "first",
-}
-for elo in ELOS:
-    agg_dict.update({
-        f'group_count_{elo}': 'first',
-        f'winrate_{elo}': 'first',
-        f'historical_best_{elo}': 'first',
-        f'is_historical_best_{elo}': 'first'
-    })
-
-grouped = (
-    df.groupby(['fen', 'next_move'])
-    .agg(agg_dict)
-    .reset_index()
-    .rename(columns={'played_by_elo': 'global_avg_elo', 'win_pov': 'global_winrate'})
-)
-
-grouped.to_parquet("../data/stats_dataset.parquet", index=False)
+df.to_parquet("../data/stats_dataset.parquet", index=False)
 print("✅ Updated dataset with historical flags")

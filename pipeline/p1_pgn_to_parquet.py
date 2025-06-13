@@ -8,12 +8,11 @@ from tqdm import tqdm
 
 # Paths to the input PGN.zst file and the output Parquet file
 zst_path = "../data/lichess_db_standard_rated_2025-01.pgn.zst"
-parquet_path = "../data/data_2025_01.parquet"
+parquet_path = "../data/data50_2025_01.parquet"
 
-# Temporary storage for parsed games
-games_data = []
+games_data = []  # Temporary storage for parsed games
 batch_size = 10_000  # Number of games to store before writing to disk
-max_games = 10_000_000  # Total number of games to process
+max_games = 50_000_000  # Total number of games to process
 
 # Check if a Parquet file already exists to determine where to resume
 if os.path.exists(parquet_path):

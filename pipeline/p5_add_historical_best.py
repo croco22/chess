@@ -22,7 +22,7 @@ for elo in ELOS:
     mask = df["played_by_elo"].between(elo - ELO_DEV, elo + ELO_DEV)
     df_elo = df[mask].copy()
 
-    # Compute historical winrate per position-move pair for this Elo range
+    # Compute historical winrate for each position-move pair for this Elo range
     winrate = (
         df_elo.groupby(["fen", "next_move"])["win_pov"]
         .agg([("count", "count"), ("mean", "mean")])
@@ -31,7 +31,7 @@ for elo in ELOS:
     )
     df = df.merge(winrate, on=["fen", "next_move"], how="left")
 
-    # Determine the historically most successful moves per FEN
+    # Determine the historically most successful moves for each position
     max_wr = winrate.groupby("fen")[winrate_col].transform("max")
     winrate["max_wr"] = max_wr
 

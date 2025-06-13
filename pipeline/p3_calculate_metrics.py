@@ -16,7 +16,7 @@ MATE_SCORE = 10_000         # Large centipawn value to represent mates
 LRU_CACHE_SIZE = None       # Unlimited size for the lru_cache decorator
 
 
-# Cached function to get best move from the engine for a given FEN
+# Cached function to get best move from the engine for a given position
 @lru_cache(maxsize=LRU_CACHE_SIZE)
 def engine_play(fen: str) -> str:
     b = chess.Board(fen)
@@ -32,7 +32,7 @@ def analyse_fen(fen: str) -> int:
     return info["score"].white().score(mate_score=MATE_SCORE)
 
 
-# Cached function to compute a "fragility score" using piece interaction graph
+# Cached function to compute the fragility score using piece interaction graph
 @lru_cache(maxsize=LRU_CACHE_SIZE)
 def compute_fragility_score(fen: str) -> float:
     b = chess.Board(fen)

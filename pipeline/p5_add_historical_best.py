@@ -25,7 +25,7 @@ for elo in ELOS:
     # Compute historical winrate for each position-move pair for this Elo range
     winrate = (
         df_elo.groupby(["fen", "next_move"])["win_pov"]
-        .agg([("count", "count"), ("mean", "mean")])
+        .agg([("count", "count"), ("mean", "mean")])  # noqa
         .rename(columns={"count": group_count_col, "mean": winrate_col})
         .reset_index()
     )

@@ -1,80 +1,40 @@
 # Elo-Dependent Move Recommendations in Chess
 
-A concise pipeline to generate Elo-dependent move recommendations in chess by processing raw Lichess data, computing position‐move features, training simple models per Elo bracket, and producing visualizations.
+This project provides a pipeline for generating chess move recommendations that are tailored to specific Elo ratings.  
+It processes raw game data from Lichess, evaluates each position using Stockfish, derives statistical features based on
+positions and moves, trains lightweight models for different Elo groups, and creates high-quality visualizations for
+analysis and presentation.
 
-## Purpose
+## Quick Setup
 
-- Convert Lichess PGN data into Parquet tables of positions and moves.
-- Compute three core features for each (FEN, move) pair:
-  1. **Engine‐Delta**: Centipawn change when a move is played.
-  2. **Fragility Score**: Sum of betweenness centralities in an attack/defense graph.
-  3. **Variance Score**: Average variance of top‐3 continuation evaluations over several plies.
-- Label moves as “optimal” if their empirical win‐rate (within an Elo window) is within 1% of the top move.
-- Train and evaluate simple models (e.g., logistic regression) per Elo bracket to predict which moves are optimal.
-- Generate static visualizations (feature importance plots, win‐rate curves, move trees).
+1. **Clone this repository** and set up a Python environment with version 3.8 or higher.
+2. **Install all required dependencies** by running `pip install -r requirements.txt`.
+3. **Download the data**: Choose any `.pgn.zst` file from the
+   official [Lichess database](https://database.lichess.org/#standard_games) and save it in the `data/` folder.
+4. **Execute the pipeline**: Run the scripts and notebooks in the correct order to process the data step by step.
+5. **Adjust configuration settings** in `pipeline/config.py` as needed. You can:
+    * Define which Elo ranges should be analyzed
+    * Set the Elo span around each target rating
+    * Specify the minimum number of samples required per group for analysis
+    * Adjust the win-rate threshold used to identify the best move in a given position
 
-## Key Scripts & Notebooks
+## Stockfish
 
-- **p1_pgn_to_parquet.py**  
-  Reads `lichess_db_standard_rated_2025-01.pgn.zst`, extracts plies 10–25, and writes Parquet tables for positions (`positions_2025_01.parquet`) and moves (`moves_2025_01.parquet`).
+* The project requires **Stockfish version 15 or newer** for position evaluation.
+* You can either place the Stockfish binary in the `stockfish/` directory or set the path using the `STOCKFISH_PATH`
+  environment variable.
+* During evaluation, each position is analyzed using Stockfish at depth 20 to ensure consistent and meaningful centipawn
+  scores.
 
-- **p2_parse_positions.ipynb**  
-  Loads and filters position/move tables to standard‐rated human games and top openings; saves filtered data (e.g., `data_2025_01.parquet`).
+## Research Context
 
-- **p3_calculate_scores.py**  
-  For each (FEN, move) with frequency ≥ 100:
-  - Runs Stockfish (depth 20) before and after the move → computes Engine‐Delta.
-  - Builds an attack/defense graph via NetworkX → computes Fragility Score (sum of centralities).
-  - Examines the top 3 Stockfish candidates and their 5‐ply evaluations → computes Variance Score.
-  Outputs `score_dataset.parquet` and a smaller sample `score_dataset_48h.parquet`.
+This repository was created as part of my seminar paper in the master's program *Information Systems* at the Chair of
+Business Analytics, University of Würzburg.  
+The paper establishes the theoretical foundation for Elo-specific move recommendations and positions the empirical
+results within the broader context of research on chess analytics.
 
-- **p4_modified_preprocessing.py**  
-  Merges `score_dataset.parquet` with raw win flags from `moves_2025_01.parquet` and `positions_2025_01.parquet`, filters out low‐frequency pairs, computes empirical win‐rates per Elo bucket (±50 Elo smoothing), labels “optimal” moves, and writes:
-  - `recommendation_dataset.parquet` (features + labels)
-  - `stats_dataset.parquet` (summary statistics per (FEN, Elo bucket)).
+## Contact
 
-- **p5_feature_importance.ipynb**  
-  Loads `recommendation_dataset.parquet`, trains separate logistic regression models for each Elo bracket, and produces:
-  - `feature_importance.svg` (standardized importance of Engine‐Delta, Fragility, Variance)
-  - `feature_coefficients.svg` (raw coefficient values).
-
-- **p6_result_analysis.ipynb**  
-  Evaluates model accuracy versus baseline (Engine move), generates:
-  - `prediction_accuracy.svg`
-  - `total_performance.svg`
-  - `elo_distribution.svg`
-  - `winrate_example.svg`
-
-- **generate_move_tree.py**  
-  Takes a FEN string and Elo bracket, reads a Parquet slice (e.g., from `recommendation_dataset.parquet`), and draws a directed move tree annotated by frequency and win‐rate. Saved as PNG under `images/`.
-
-## Data Files
-
-- **lichess_db_standard_rated_2025-01.pgn.zst**  
-  Raw Lichess January 2025 dump.
-
-- **Parquet Tables** (all under `data/`):
-  - `positions_2025_01.parquet` (filtered plies 10–25; columns: FEN, halfmove index, Elo, result).
-  - `moves_2025_01.parquet` (FEN, UCI move, Elo, win flag).
-  - `data_2025_01.parquet` (filtered subset of positions & moves).
-  - `score_dataset.parquet` (Engine‐Delta, Fragility, Variance per (FEN, move), plus raw win flags).
-  - `score_dataset_48h.parquet` (48-hour sample for quick prototyping).
-  - `recommendation_dataset.parquet` (merged features, labels, win rates).
-  - `stats_dataset.parquet` (summary stats per (FEN, Elo bucket)).
-
-## Visualizations
-
-Final static plots live in `images/`:
-- **elo_distribution.svg**  
-- **feature_coefficients.svg**  
-- **feature_importance.svg**  
-- **prediction_accuracy.svg**  
-- **selection_decision.svg**  
-- **total_performance.svg**  
-- **winrate_example.svg**  
-- **move_tree_<timestamp>.png** (one or more examples).
-
-## Stockfish Integration
-
-- Requires Stockfish v15+ accessible via a local binary under `stockfish/` or defined by the `STOCKFISH_PATH` environment variable.
-- Scripts in **p3_calculate_scores.py** call Stockfish at depth 20 using a Python UCI‐wrapper to obtain centipawn evaluations.
+If you have any questions or would like to receive a copy of the seminar paper as a PDF, feel free to reach out to me
+via email:  
+[philipp.landeck@stud-mail.uni-wuerzburg.de](mailto:philipp.landeck@stud-mail.uni-wuerzburg.de)

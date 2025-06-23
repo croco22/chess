@@ -1,8 +1,10 @@
+# pipreqs . --scan-notebooks --ignore deprecated --force
 chess==1.11.2
 matplotlib==3.10.3
 networkx==3.4.2
-numpy==2.3.0
+numpy==2.3.1
 pandas==2.3.0
+python-dotenv==1.1.0
 scikit_learn==1.7.0
 statsmodels==0.14.4
 tqdm==4.67.1

@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-PARQUET_PATH = "data/moves_2025_01.parquet"
-ENGINE_PATH = "stockfish/stockfish-windows-x86-64-avx2.exe"
-SAMPLE_SIZE = 50_000
+PARQUET_PATH = "../data/moves_2025_01.parquet"
+ENGINE_PATH = "../stockfish/stockfish-windows-x86-64-avx2.exe"
+SAMPLE_SIZE = 100_000
 MAX_CHILDREN = 3
 MAX_DEPTH = 8
 THRESHOLD_CP = 50
@@ -211,5 +211,5 @@ if __name__ == "__main__":
     cbar.set_label("Winrate")
     ax.axis("off")
     fig.tight_layout()
-    fig.savefig("images/move_tree.pdf")
+    fig.savefig("../images/move_tree.pdf")
     plt.show()
